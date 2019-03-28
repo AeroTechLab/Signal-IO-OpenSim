@@ -23,20 +23,31 @@
 #include "signal_io/signal_io.h"
 
 #include <OpenSim/OpenSim.h>
-#include <stdlib.h>
+// #include <OpenSim/Simulation/Model/Model.h>
+// #include <OpenSim/Common/osimCommon.h>
+// #include <simbody/SimTKcommon.h>
+// #include <simbody/SimTKsimbody.h>
+
+#include <cstdlib>
+#include <thread>
+#include <map>
 
 using SimTK::Vec3;
 using SimTK::Inertia;
 using SimTK::Pi;
 
-typedef struct _OSimModelData
+typedef struct _OSimProcess
 {
   OpenSim::Model* model;
-  
+  OpenSim::Body* body;
+  OpenSim::SliderJoint* groundJoint;
+  std::thread thread;
 }
-OSimModelData;
+OSimProcess;
 
-typedef OSimModelData OSimModel;
+std::map<OSimProcess, const char*> processMap;
+
+OSimProcess* processesList = NULL;
 
 DECLARE_MODULE_INTERFACE( SIGNAL_IO_INTERFACE );
 
