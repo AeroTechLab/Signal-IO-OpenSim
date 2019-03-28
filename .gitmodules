@@ -1,0 +1,3 @@
+[submodule "signal_io"]
+	path = signal_io
+	url = https://github.com/EESC-MKGroup/Signal-IO-Interface
