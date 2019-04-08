@@ -24,52 +24,35 @@
 
 #include <OpenSim/OpenSim.h>
 
+#include <iostream>
 #include <cstdlib>
 #include <thread>
 #include <chrono>
+//#include <iterator>
+//#include <map>
+#include <algorithm>
 #include <vector>
 
 const SimTK::Vec3 BLOCK_COLORS[] = { SimTK::Blue, SimTK::Red, SimTK::Green, SimTK::Yellow }; 
 
+class OSimProcess;
+
+// static std::map<const char*, OSimProcess*> processMap;
+static std::vector<OSimProcess*> processList;
+
 class OSimProcess
 {
 public:
-  OpenSim::Model* model;  
-  OpenSim::Body* body;
+  OpenSim::Model* model; 
+  SimTK::State state;
   OpenSim::CoordinateActuator* inputActuator;
   OpenSim::CoordinateActuator* feedbackActuator;
-  SimTK::State state;
   
-  std::thread thread;
-  volatile bool running;
-  
-  static std::map<const char*, OSimProcess*> processMap;
-  
-  static void Process( OSimProcess* process )
+  OSimProcess( const char* modelName, SimTK::Vec3 modelColor )
   {
-    const long TIME_STEP = 20;
-    
-    OpenSim::Manager manager( *(process->model) );
-    process->state.setTime( 0 );
-    manager.initialize( process->state );
-    
-    std::chrono::system_clock::time_point initialTime = std::chrono::system_clock::now();
-    
-    process->running = true;
-    while( process->running )
-    {
-      std::chrono::system_clock::time_point simTime = std::chrono::system_clock::now();
-      
-      process->state = manager.integrate( ( simTime - initialTime ).count() / 1000.0 );
-      
-      std::this_thread::sleep_until( simTime + std::chrono::milliseconds( TIME_STEP ) );
-    }
-  }
-  
-  OSimProcess( const char* modelName )
-  {
+    std::cout << "creating osim process" << std::endl;
     model = new OpenSim::Model();
-    model->setUseVisualizer( true );
+//     model->setUseVisualizer( true );
   
     model->setName( modelName );
     model->setGravity( SimTK::Vec3( 0, 0, 0 ) );
@@ -82,7 +65,7 @@ public:
     model->addJoint( groundJoint );
   
     OpenSim::Brick* blockMesh = new OpenSim::Brick( SimTK::Vec3( 0.5, 0.5, 0.5 ) );
-    blockMesh->setColor( BLOCK_COLORS[ processMap.size() ] );
+    blockMesh->setColor( modelColor );
     body->attachGeometry( blockMesh );
   
     OpenSim::Coordinate& coordinate = groundJoint->updCoordinate();
@@ -103,6 +86,7 @@ public:
   
     coordinate.setValue( state, 0.0 );
 
+    std::cout << "starting update thread" << std::endl;
     thread = std::thread( &OSimProcess::Process, this );
   }
   
@@ -111,8 +95,37 @@ public:
     running = false;
     thread.join();
     
-    model->setUseVisualizer( false );
+//     model->setUseVisualizer( false );
     delete model;
+  }
+  
+private:
+  OpenSim::Body* body;
+  
+  std::thread thread;
+  volatile bool running;
+  
+  static void Process( OSimProcess* process )
+  {
+    const long TIME_STEP = 20;
+    
+    OpenSim::Manager manager( *(process->model) );
+    process->state.setTime( 0 );
+    manager.initialize( process->state );
+    
+    std::chrono::system_clock::time_point initialTime = std::chrono::system_clock::now();
+    
+    process->running = true;
+    while( process->running )
+    {
+      std::chrono::system_clock::time_point simTime = std::chrono::system_clock::now();
+      
+      process->state = manager.integrate( ( simTime - initialTime ).count() / 1000.0 );
+      
+      std::this_thread::sleep_until( simTime + std::chrono::milliseconds( TIME_STEP ) );
+      
+      std::cout << "running update loop" << std::endl;
+    }
   }
 };
 
@@ -120,12 +133,17 @@ DECLARE_MODULE_INTERFACE( SIGNAL_IO_INTERFACE );
 
 int InitDevice( const char* modelName )
 {  
-  if( OSimProcess::processMap.find( modelName ) == OSimProcess::processMap.end() ) 
-    OSimProcess::processMap[ modelName ] = new OSimProcess( modelName );
+//   if( OSimProcess::processMap.find( modelName ) == OSimProcess::processMap.end() ) 
+//     OSimProcess::processMap[ modelName ] = new OSimProcess( modelName, BLOCK_COLORS[ processMap.size() ] );
+//   
+//   return int( std::distance( OSimProcess::processMap.begin(), OSimProcess::processMap.find( modelName ) ) );
   
-  //OSimProcess* process = OSimProcess::processMap[ modelName ];
-  
-  return int( std::distance( OSimProcess::processMap.begin(), OSimProcess::processMap.find( modelName ) ) );
+  for( int deviceIndex = 0; deviceIndex < processList.size(); deviceIndex++ )
+    if( processList[ deviceIndex ]->model->getName() == modelName ) return deviceIndex;
+    
+  processList.push_back( new OSimProcess( modelName, BLOCK_COLORS[ processList.size() ] ) );
+  std::cout << "device index: " << (int) processList.size() - 1 << std::endl;
+  return (int) processList.size() - 1;
 }
 
 void EndDevice( int processID )
@@ -142,7 +160,8 @@ size_t Read( int processID, unsigned int channel, double* ref_value )
 {
   if( processID == SIGNAL_IO_DEVICE_INVALID_ID ) return 0;
   
-  OSimProcess* process = std::next( OSimProcess::processMap.begin(), size_t(processID) )->second;
+//   OSimProcess* process = std::next( OSimProcess::processMap.begin(), size_t(processID) )->second;
+  OSimProcess* process = processList[ processID ];
   
   if( channel == 0 ) *ref_value = process->inputActuator->getCoordinate()->getValue( process->state );
   else if( channel == 1 ) *ref_value = process->inputActuator->getCoordinate()->getSpeedValue( process->state );
@@ -178,7 +197,8 @@ bool Write( int processID, unsigned int channel, double value )
   
   if( channel != 0 ) return false;
   
-  OSimProcess* process = std::next( OSimProcess::processMap.begin(), size_t(processID) )->second;
+//   OSimProcess* process = std::next( OSimProcess::processMap.begin(), size_t(processID) )->second;
+  OSimProcess* process = processList[ processID ];
   
   process->feedbackActuator->setOverrideActuation( process->state, value );
   

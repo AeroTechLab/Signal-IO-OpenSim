@@ -1,8 +1,11 @@
-cmake_minimum_required( VERSION 3.2 )
+cmake_minimum_required( VERSION 3.9 )
 project( Signal-IO-OpenSim )
 
 set( CMAKE_CXX_STANDARD 11 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
+
+SET(CMAKE_CXX_FLAGS "-O0")
+SET(CMAKE_C_FLAGS "-O0")
 
 # Find the OpenSim libraries and header files.
 set( OPENSIM_INSTALL_DIR $ENV{OPENSIM_HOME} CACHE PATH "Top-level directory of OpenSim install." )
@@ -15,5 +18,6 @@ include( ${CMAKE_CURRENT_LIST_DIR}/signal_io/CMakeLists.txt )
 include_directories( ${CMAKE_CURRENT_LIST_DIR} )
 
 add_library( OpenSimIO MODULE  ${CMAKE_CURRENT_LIST_DIR}/virtual_robot_osim.cpp )
-target_link_libraries( OpenSimIO ${OpenSim_LIBRARIES} )
 set_target_properties( OpenSimIO PROPERTIES PREFIX "" )
+set_target_properties( OpenSimIO PROPERTIES INTERPROCEDURAL_OPTIMIZATION True)
+target_link_libraries( OpenSimIO ${OpenSim_LIBRARIES} )
