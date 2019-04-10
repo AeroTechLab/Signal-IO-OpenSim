@@ -23,50 +23,37 @@
 #include "signal_io/signal_io.h"
 
 #include <OpenSim/OpenSim.h>
-#include <simbody/internal/Visualizer_InputListener.h>
 
 #include <iostream>
 #include <cstdlib>
+#include <thread>
 #include <chrono>
+//#include <iterator>
+//#include <map>
+#include <algorithm>
 #include <vector>
 
 const SimTK::Vec3 BLOCK_COLORS[] = { SimTK::Blue, SimTK::Red, SimTK::Green, SimTK::Yellow }; 
 
 class OSimProcess;
 
+// static std::map<const char*, OSimProcess*> processMap;
 static std::vector<OSimProcess*> processList;
-
-class SliderListener : public SimTK::Visualizer::InputListener
-{
-public:
-  SliderListener( OpenSim::CoordinateActuator* actuator, SimTK::State& state )
-  : state( state )
-  {
-    this->actuator = actuator;
-  }
-  
-  bool sliderMoved( int slider, SimTK::Real value )
-  {
-    if( slider != 1 ) return false;
-    actuator->setOverrideActuation( state, value );
-    return true;
-  }
-  
-private:
-  OpenSim::CoordinateActuator* actuator;
-  SimTK::State& state;
-};
 
 class OSimProcess
 {
-public:  
+public:
+  OpenSim::Model* model; 
+  SimTK::State state;
+  OpenSim::CoordinateActuator* inputActuator;
+  OpenSim::CoordinateActuator* feedbackActuator;
+  
   OSimProcess( const char* modelName, SimTK::Vec3 modelColor )
   {
     std::cout << "creating osim process" << std::endl;
     model = new OpenSim::Model();
+//     model->setUseVisualizer( true );
   
-    model->setUseVisualizer( true );
-    
     model->setName( modelName );
     model->setGravity( SimTK::Vec3( 0, 0, 0 ) );
 
@@ -74,8 +61,7 @@ public:
     model->addBody( body );
 
     const OpenSim::Ground& ground = model->getGround();
-    OpenSim::PinJoint* groundJoint = new OpenSim::PinJoint( "body2ground", ground, *body );
-    //OpenSim::SliderJoint* groundJoint = new OpenSim::SliderJoint( "body2ground", ground, *body );
+    OpenSim::SliderJoint* groundJoint = new OpenSim::SliderJoint( "body2ground", ground, *body );
     model->addJoint( groundJoint );
   
     OpenSim::Brick* blockMesh = new OpenSim::Brick( SimTK::Vec3( 0.5, 0.5, 0.5 ) );
@@ -89,71 +75,71 @@ public:
     feedbackActuator = new OpenSim::CoordinateActuator( "feedback" );
     feedbackActuator->setCoordinate( &coordinate );
     model->addForce( feedbackActuator );
-    
+  
+    //model->finalizeFromProperties()
+    //model->printBasicInfo()
+  
     state = model->initSystem();
 
-    model->updVisualizer().updSimbodyVisualizer().addInputListener( new SliderListener( inputActuator, state ) );
-    model->updVisualizer().updSimbodyVisualizer().addSlider( "input_force", 1, -1.0, 1.0, 0.0 );
-    
     inputActuator->overrideActuation( state, true );
     feedbackActuator->overrideActuation( state, true );
   
     coordinate.setValue( state, 0.0 );
-    
-    manager = new OpenSim::Manager( *(model) );
-    state.setTime( 0 );
-    manager->initialize( state );
-    
-    initialTime = std::chrono::system_clock::now();
-    simulationTime = std::chrono::system_clock::now();
+
+    std::cout << "starting update thread" << std::endl;
+    thread = std::thread( &OSimProcess::Process, this );
   }
   
   ~OSimProcess()
   {
-    model->setUseVisualizer( false );
+    running = false;
+    thread.join();
     
-    delete manager;
+//     model->setUseVisualizer( false );
     delete model;
   }
   
-  void Update()
+private:
+  OpenSim::Body* body;
+  
+  std::thread thread;
+  volatile bool running;
+  
+  static void Process( OSimProcess* process )
   {
-    const long MIN_TIME_STEP = 5;
+    const long TIME_STEP = 20;
     
-    std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
+    OpenSim::Manager manager( *(process->model) );
+    process->state.setTime( 0 );
+    manager.initialize( process->state );
     
-    if( ( currentTime - simulationTime ).count() > MIN_TIME_STEP )
-    {      
-      simulationTime = currentTime;
-      state = manager->integrate( ( simulationTime - initialTime ).count() / 1000.0 );
+    std::chrono::system_clock::time_point initialTime = std::chrono::system_clock::now();
+    
+    process->running = true;
+    while( process->running )
+    {
+      std::chrono::system_clock::time_point simTime = std::chrono::system_clock::now();
+      
+      process->state = manager.integrate( ( simTime - initialTime ).count() / 1000.0 );
+      
+      std::this_thread::sleep_until( simTime + std::chrono::milliseconds( TIME_STEP ) );
+      
       std::cout << "running update loop" << std::endl;
     }
   }
-  
-  inline std::string GetName() { return model->getName(); }
-  inline double GetPosition() { return inputActuator->getCoordinate()->getValue( state ); }
-  inline double GetVelocity() { return inputActuator->getCoordinate()->getSpeedValue( state ); }
-  inline double GetAcceleration() { return inputActuator->getCoordinate()->getAccelerationValue( state ); }
-  inline double GetForce() { return inputActuator->getOverrideActuation( state ); }
-  inline void SetForce( double value ) { feedbackActuator->setOverrideActuation( state, value ); }
-  
-private:
-  OpenSim::Model* model; 
-  OpenSim::Body* body;
-  OpenSim::Manager* manager;
-  OpenSim::CoordinateActuator* inputActuator;
-  OpenSim::CoordinateActuator* feedbackActuator;
-  SimTK::State state;
-  
-  std::chrono::system_clock::time_point initialTime, simulationTime;
 };
 
 DECLARE_MODULE_INTERFACE( SIGNAL_IO_INTERFACE );
 
 int InitDevice( const char* modelName )
 {  
+//   if( OSimProcess::processMap.find( modelName ) == OSimProcess::processMap.end() ) 
+//     OSimProcess::processMap[ modelName ] = new OSimProcess( modelName, BLOCK_COLORS[ processMap.size() ] );
+//   
+//   return int( std::distance( OSimProcess::processMap.begin(), OSimProcess::processMap.find( modelName ) ) );
+  
   for( int deviceIndex = 0; deviceIndex < processList.size(); deviceIndex++ )
-    if( processList[ deviceIndex ]->GetName() == modelName ) return deviceIndex;
+    if( processList[ deviceIndex ]->model->getName() == modelName ) return deviceIndex;
     
   processList.push_back( new OSimProcess( modelName, BLOCK_COLORS[ processList.size() ] ) );
   std::cout << "device index: " << (int) processList.size() - 1 << std::endl;
@@ -162,9 +148,6 @@ int InitDevice( const char* modelName )
 
 void EndDevice( int processID )
 {
-  for( OSimProcess* process : processList )
-    delete process;
-  
   return;
 }
 
@@ -175,20 +158,16 @@ size_t GetMaxInputSamplesNumber( int processID )
 
 size_t Read( int processID, unsigned int channel, double* ref_value )
 {
-  *ref_value = 0.0;
+  if( processID == SIGNAL_IO_DEVICE_INVALID_ID ) return 0;
   
-  if( processID < 0 ) return 0;
+//   OSimProcess* process = std::next( OSimProcess::processMap.begin(), size_t(processID) )->second;
+  OSimProcess* process = processList[ processID ];
   
-  OSimProcess* process = processList[ (size_t) processID ];
-  
-  if( channel > 3 ) return 0;
-  
-  process->Update();
-  
-  if( channel == 0 ) *ref_value = process->GetPosition();
-  else if( channel == 1 ) *ref_value = process->GetVelocity();
-  else if( channel == 2 ) *ref_value = process->GetAcceleration();
-  else if( channel == 3 ) *ref_value = process->GetForce();
+  if( channel == 0 ) *ref_value = process->inputActuator->getCoordinate()->getValue( process->state );
+  else if( channel == 1 ) *ref_value = process->inputActuator->getCoordinate()->getSpeedValue( process->state );
+  else if( channel == 2 ) *ref_value = process->inputActuator->getCoordinate()->getAccelerationValue( process->state );
+  else if( channel == 3 ) *ref_value = process->inputActuator->getOverrideActuation( process->state );
+  else *ref_value = 0.0;
   
   return 1;
 }
@@ -205,7 +184,7 @@ void Reset( int processID )
 
 bool CheckInputChannel( int processID, unsigned int channel )
 {
-  if( processID < 0 ) return false;
+  if( processID == SIGNAL_IO_DEVICE_INVALID_ID ) return false;
   
   if( channel > 3 ) return false;
   
@@ -214,15 +193,14 @@ bool CheckInputChannel( int processID, unsigned int channel )
 
 bool Write( int processID, unsigned int channel, double value )
 {
-  if( processID < 0 ) return false;
+  if( processID == SIGNAL_IO_DEVICE_INVALID_ID ) return false;
   
   if( channel != 0 ) return false;
   
-  OSimProcess* process = processList[ (size_t) processID ];
+//   OSimProcess* process = std::next( OSimProcess::processMap.begin(), size_t(processID) )->second;
+  OSimProcess* process = processList[ processID ];
   
-  process->Update();
-  
-  process->SetForce( value );
+  process->feedbackActuator->setOverrideActuation( process->state, value );
   
   return true;
 }
