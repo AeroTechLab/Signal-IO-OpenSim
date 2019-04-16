@@ -5,6 +5,32 @@
 #include <cstdlib>
 #include <chrono>
 
+class SliderEventHandler : public SimTK::PeriodicEventHandler
+{
+public:
+  SliderEventHandler( SimTK::Visualizer::InputSilo& inputSilo, int& sliderID, OpenSim::CoordinateActuator* actuator, SimTK::Real updateInterval )
+  : PeriodicEventHandler( updateInterval ), sliderID( sliderID ), inputSilo( inputSilo )
+  {
+    this->actuator = actuator;
+  }
+  
+  void handleEvent( SimTK::State& state, SimTK::Real accuracy, bool & shouldTerminate ) const
+  {
+    while( inputSilo.isAnyUserInput() ) 
+    {
+      std::cout << "received input" << std::endl;
+      SimTK::Real userInputValue;
+      while( inputSilo.takeSliderMove( sliderID, userInputValue ) ) 
+        actuator->setOverrideActuation( state, userInputValue );
+    }
+  }
+  
+private:
+  int& sliderID;
+  SimTK::Visualizer::InputSilo& inputSilo;
+  OpenSim::CoordinateActuator* actuator;
+};
+
 int main()
 {
   OpenSim::Model model;
@@ -35,14 +61,23 @@ int main()
 //     feedbackActuator = new OpenSim::CoordinateActuator( "feedback" );
 //     feedbackActuator->setCoordinate( &coordinate );
 //     model->addForce( feedbackActuator );
-    
-  model.finalizeFromProperties();
-    
+  
+  //model.setUseVisualizer( true );
+  //model.buildSystem();
+  
+  //SimTK::Visualizer::InputSilo* inputSilo = new SimTK::Visualizer::InputSilo();
+  //model.updVisualizer().updSimbodyVisualizer().addInputListener( inputSilo );
+  //SimTK::Visualizer::InputSilo& inputSilo = model.updVisualizer().updInputSilo();
+  
+  //model.updMultibodySystem().addEventHandler( new SliderEventHandler( inputSilo, sliderID, inputActuator, 0.1 ) );
+  
+  //model.setUseVisualizer( false );
   SimTK::State& state = model.initSystem();
 
-  //model->updVisualizer().updSimbodyVisualizer().addInputListener( new SliderListener( inputActuator, state ) );
-  //model->updVisualizer().updSimbodyVisualizer().addSlider( "Input Force", 1, -1.0, 1.0, 0.0 );
-    
+  int sliderID = 1;
+  
+  model.updVisualizer().updSimbodyVisualizer().addSlider( "Input Force", sliderID, -1.0, 1.0, 0.0 );
+  
   inputActuator->overrideActuation( state, true );
 //     feedbackActuator->overrideActuation( state, true );
   
@@ -57,7 +92,13 @@ int main()
   {
     simulationTime = std::chrono::steady_clock::now();
     
-    inputActuator->setOverrideActuation( state, fmod( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count(), 20.0 ) - 10.0 );
+    while( model.updVisualizer().updInputSilo().isAnyUserInput() ) 
+    {
+      std::cout << "received input" << std::endl;
+      SimTK::Real userInputValue;
+      while( model.updVisualizer().updInputSilo().takeSliderMove( sliderID, userInputValue ) ) 
+        inputActuator->setOverrideActuation( state, userInputValue );
+    }
     
     OpenSim::Manager manager( model );
     manager.initialize( state );
@@ -65,7 +106,7 @@ int main()
       
     std::this_thread::sleep_until( simulationTime + std::chrono::milliseconds( 10 ) );
      
-    std::cout << "simulation time: " << state.getTime() << ", position: " << inputActuator->getCoordinate()->getValue( state ) << std::endl;
+    //std::cout << "simulation time: " << state.getTime() << ", position: " << inputActuator->getCoordinate()->getValue( state ) << std::endl;
   }
   
   return 0;

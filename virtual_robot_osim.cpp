@@ -36,28 +36,6 @@ class OSimProcess;
 
 static std::vector<OSimProcess*> processList;
 
-class SliderListener : public SimTK::Visualizer::InputListener
-{
-public:
-  SliderListener( OpenSim::CoordinateActuator* actuator, SimTK::State& state )
-  : state( state )
-  {
-    this->actuator = actuator;
-  }
-  
-  bool sliderMoved( int slider, SimTK::Real value )
-  {
-    //if( slider != 1 ) return false;
-    std::cout << "input force: " << value << std::endl;
-    actuator->setOverrideActuation( state, value );
-    return true;
-  }
-  
-private:
-  OpenSim::CoordinateActuator* actuator;
-  SimTK::State& state;
-};
-
 class OSimProcess
 {
 public:  
@@ -89,19 +67,21 @@ public:
     inputActuator = new OpenSim::CoordinateActuator( "input" );
     inputActuator->setCoordinate( &coordinate );
     model->addForce( inputActuator );
-//     feedbackActuator = new OpenSim::CoordinateActuator( "feedback" );
-//     feedbackActuator->setCoordinate( &coordinate );
-//     model->addForce( feedbackActuator );
+    feedbackActuator = new OpenSim::CoordinateActuator( "feedback" );
+    feedbackActuator->setCoordinate( &coordinate );
+    model->addForce( feedbackActuator );
     
-    model->finalizeFromProperties();
+    //model->finalizeFromProperties();
     
     state = model->initSystem();
 
-    //model->updVisualizer().updSimbodyVisualizer().addInputListener( new SliderListener( inputActuator, state ) );
-    //model->updVisualizer().updSimbodyVisualizer().addSlider( "Input Force", 1, -1.0, 1.0, 0.0 );
+    inputSliderID = 1;
+    model->updVisualizer().updSimbodyVisualizer().addSlider( "Input Force", inputSliderID, -1.0, 1.0, 0.0 );
+    feedbackSliderID = 2;
+    model->updVisualizer().updSimbodyVisualizer().addSlider( "Feedback Force", inputSliderID, -2.0, 2.0, 0.0 );
     
     inputActuator->overrideActuation( state, true );
-//     feedbackActuator->overrideActuation( state, true );
+    feedbackActuator->overrideActuation( state, true );
   
     coordinate.setValue( state, 0.0 );
     
@@ -126,11 +106,19 @@ public:
     
     if( std::chrono::duration_cast<std::chrono::duration<double>>( currentTime - simulationTime ).count() > MIN_TIME_STEP )
     {
-      //std::cout << "elapsed time: " << std::chrono::duration_cast<std::chrono::duration<double>>( currentTime - simulationTime ).count() << std::endl;
-      //model->updVisualizer().updSimbodyVisualizer().setSliderValue( 1, fmod( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count(), 1.0 ) );
-      inputActuator->setOverrideActuation( state, fmod( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count(), 20.0 ) - 10.0 );
+      while( model->updVisualizer().updInputSilo().isAnyUserInput() ) 
+      {
+        SimTK::Real forceValue;
+        while( model->updVisualizer().updInputSilo().takeSliderMove( inputSliderID, forceValue ) ) 
+          inputActuator->setOverrideActuation( state, forceValue );
+        while( model->updVisualizer().updInputSilo().takeSliderMove( feedbackSliderID, forceValue ) )
+          feedbackActuator->setOverrideActuation( state, forceValue );
+      }
+      
+      model->updVisualizer().updSimbodyVisualizer().setSliderValue( feedbackSliderID, feedbackActuator->getOverrideActuation( state ) );
+      
       simulationTime = currentTime;
-      std::cout << "simulation time: " << state.getTime() << ", position: " << inputActuator->getCoordinate()->getValue( state ) << std::endl;
+      std::cout << "simulation time: " << state.getTime() << std::endl;
       OpenSim::Manager manager( *model );
       manager.initialize( state );
       state = manager.integrate( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count() );
@@ -142,7 +130,7 @@ public:
   inline double GetVelocity() { return inputActuator->getCoordinate()->getSpeedValue( state ); }
   inline double GetAcceleration() { return inputActuator->getCoordinate()->getAccelerationValue( state ); }
   inline double GetForce() { return inputActuator->getOverrideActuation( state ); }
-  inline void SetForce( double value ) { feedbackActuator->setOverrideActuation( state, value ); }
+  inline void SetForce( double value ) { model->updVisualizer().updSimbodyVisualizer().setSliderValue( feedbackSliderID, value ); }
   
 private:
   OpenSim::Model* model; 
@@ -152,6 +140,8 @@ private:
   SimTK::State state;
   
   std::chrono::steady_clock::time_point initialTime, simulationTime;
+  
+  int inputSliderID, feedbackSliderID;
 };
 
 DECLARE_MODULE_INTERFACE( SIGNAL_IO_INTERFACE );
@@ -162,7 +152,7 @@ int InitDevice( const char* modelName )
     if( processList[ deviceIndex ]->GetName() == modelName ) return deviceIndex;
     
   processList.push_back( new OSimProcess( modelName, BLOCK_COLORS[ processList.size() ] ) );
-  std::cout << "device index: " << (int) processList.size() - 1 << std::endl;
+
   return (int) processList.size() - 1;
 }
 
