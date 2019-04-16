@@ -21,3 +21,6 @@ add_library( OpenSimIO MODULE  ${CMAKE_CURRENT_LIST_DIR}/virtual_robot_osim.cpp 
 set_target_properties( OpenSimIO PROPERTIES PREFIX "" )
 #set_target_properties( OpenSimIO PROPERTIES INTERPROCEDURAL_OPTIMIZATION True)
 target_link_libraries( OpenSimIO ${OpenSim_LIBRARIES} )
+
+add_executable( OpenSimTest ${CMAKE_CURRENT_LIST_DIR}/opensim_test.cpp )
+target_link_libraries( OpenSimTest ${OpenSim_LIBRARIES} )

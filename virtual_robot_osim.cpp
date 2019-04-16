@@ -83,13 +83,17 @@ public:
     blockMesh->setColor( modelColor );
     body->attachGeometry( blockMesh );
   
-    OpenSim::Coordinate& coordinate = groundJoint->updCoordinate();
+    OpenSim::Coordinate& coordinate = groundJoint->updCoordinate( OpenSim::PinJoint::Coord::RotationZ );
+    double coordinateRange[ 2 ] = { -SimTK::Pi, SimTK::Pi };
+    coordinate.setRange( coordinateRange );
     inputActuator = new OpenSim::CoordinateActuator( "input" );
     inputActuator->setCoordinate( &coordinate );
     model->addForce( inputActuator );
-    feedbackActuator = new OpenSim::CoordinateActuator( "feedback" );
-    feedbackActuator->setCoordinate( &coordinate );
-    model->addForce( feedbackActuator );
+//     feedbackActuator = new OpenSim::CoordinateActuator( "feedback" );
+//     feedbackActuator->setCoordinate( &coordinate );
+//     model->addForce( feedbackActuator );
+    
+    model->finalizeFromProperties();
     
     state = model->initSystem();
 
@@ -97,13 +101,11 @@ public:
     //model->updVisualizer().updSimbodyVisualizer().addSlider( "Input Force", 1, -1.0, 1.0, 0.0 );
     
     inputActuator->overrideActuation( state, true );
-    feedbackActuator->overrideActuation( state, true );
+//     feedbackActuator->overrideActuation( state, true );
   
     coordinate.setValue( state, 0.0 );
     
-    manager = new OpenSim::Manager( *(model) );
     state.setTime( 0 );
-    manager->initialize( state );
     
     initialTime = std::chrono::steady_clock::now();
     simulationTime = std::chrono::steady_clock::now();
@@ -113,23 +115,25 @@ public:
   {
     model->setUseVisualizer( false );
     
-    delete manager;
     delete model;
   }
   
   void Update()
   {
-    const double MIN_TIME_STEP = 0.01;
+    const double MIN_TIME_STEP = 0.02;
     
     std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
     
     if( std::chrono::duration_cast<std::chrono::duration<double>>( currentTime - simulationTime ).count() > MIN_TIME_STEP )
     {
-      std::cout << "elapsed time: " << std::chrono::duration_cast<std::chrono::duration<double>>( currentTime - simulationTime ).count() << std::endl;
+      //std::cout << "elapsed time: " << std::chrono::duration_cast<std::chrono::duration<double>>( currentTime - simulationTime ).count() << std::endl;
       //model->updVisualizer().updSimbodyVisualizer().setSliderValue( 1, fmod( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count(), 1.0 ) );
-      //inputActuator->setOverrideActuation( state, fmod( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count(), 1.0 ) );
+      inputActuator->setOverrideActuation( state, fmod( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count(), 20.0 ) - 10.0 );
       simulationTime = currentTime;
-      //state = manager->integrate( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count() );
+      std::cout << "simulation time: " << state.getTime() << ", position: " << inputActuator->getCoordinate()->getValue( state ) << std::endl;
+      OpenSim::Manager manager( *model );
+      manager.initialize( state );
+      state = manager.integrate( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count() );
     }
   }
   
@@ -143,7 +147,6 @@ public:
 private:
   OpenSim::Model* model; 
   OpenSim::Body* body;
-  OpenSim::Manager* manager;
   OpenSim::CoordinateActuator* inputActuator;
   OpenSim::CoordinateActuator* feedbackActuator;
   SimTK::State state;
@@ -185,13 +188,13 @@ size_t Read( int processID, unsigned int channel, double* ref_value )
   OSimProcess* process = processList[ (size_t) processID ];
   
   if( channel > 3 ) return 0;
-  std::cout << "calling update on process " << processID << std::endl;
-  //process->Update();
+//   std::cout << "calling update on process " << processID << std::endl;
+  process->Update();
   
-//   if( channel == 0 ) *ref_value = process->GetPosition();
-//   else if( channel == 1 ) *ref_value = process->GetVelocity();
-//   else if( channel == 2 ) *ref_value = process->GetAcceleration();
-//   else if( channel == 3 ) *ref_value = process->GetForce();
+  if( channel == 0 ) *ref_value = process->GetPosition();
+  else if( channel == 1 ) *ref_value = process->GetVelocity();
+  else if( channel == 2 ) *ref_value = process->GetAcceleration();
+  else if( channel == 3 ) *ref_value = process->GetForce();
   
   return 1;
 }
@@ -223,9 +226,9 @@ bool Write( int processID, unsigned int channel, double value )
   
   OSimProcess* process = processList[ (size_t) processID ];
   
-  //process->Update();
-  std::cout << "setting feedback force" << std::endl;
-  //process->SetForce( value );
+//   std::cout << "setting feedback force" << std::endl;
+  process->SetForce( value );
+//   process->Update();
   
   return true;
 }
