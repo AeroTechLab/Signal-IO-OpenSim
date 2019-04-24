@@ -87,6 +87,9 @@ public:
     
     measuresList.resize( VARS_NUMBER );
     
+//     initialTime = std::chrono::steady_clock::now();
+//     simulationTime = std::chrono::steady_clock::now();
+    
     std::cout << "starting update thread" << std::endl;
     updateThread = std::thread( &OSimProcess::Update, this );
   }
@@ -98,6 +101,36 @@ public:
     
     model.setUseVisualizer( false );
   }
+  
+//   void Update()
+//   {
+//     const double MIN_TIME_STEP = 0.02;
+//     
+//     std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
+//     
+//     if( std::chrono::duration_cast<std::chrono::duration<double>>( currentTime - simulationTime ).count() > MIN_TIME_STEP )
+//     {
+//       while( model.updVisualizer().updInputSilo().isAnyUserInput() ) 
+//       {
+//         SimTK::Real forceValue;
+//         while( model.updVisualizer().updInputSilo().takeSliderMove( inputSliderID, forceValue ) ) 
+//           inputActuator->setOverrideActuation( state, forceValue );
+//         while( model.updVisualizer().updInputSilo().takeSliderMove( feedbackSliderID, forceValue ) )
+//           feedbackActuator->setOverrideActuation( state, forceValue );
+//       }
+//       
+//       simulationTime = currentTime;
+//       std::cout << "simulation time: " << state.getTime() << ", position: " << inputActuator->getCoordinate()->getValue( state ) << std::endl;
+//       OpenSim::Manager manager( model );
+//       manager.initialize( state );
+//       state = manager.integrate( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count() );
+//       
+//       measuresList[ POSITION ] = inputActuator->getCoordinate()->getValue( state );
+//       measuresList[ VELOCITY ] = inputActuator->getCoordinate()->getSpeedValue( state );
+//       measuresList[ ACCELERATION ] = inputActuator->getCoordinate()->getAccelerationValue( state );
+//       measuresList[ FORCE ] = inputActuator->getOverrideActuation( state );
+//     }
+//   }
   
   inline std::string GetName() { return model.getName(); }
   inline double GetMeasurement( size_t index ) { return index < VARS_NUMBER ? measuresList[ index ] : 0.0; }
@@ -142,7 +175,7 @@ private:
           process->feedbackActuator->setOverrideActuation( process->state, forceValue );
       }
       
-      process->model.updVisualizer().updSimbodyVisualizer().setSliderValue( process->feedbackSliderID, process->feedbackActuator->getOverrideActuation( process->state ) );
+      //process->model.updVisualizer().updSimbodyVisualizer().setSliderValue( process->feedbackSliderID, process->feedbackActuator->getOverrideActuation( process->state ) );
       
       OpenSim::Manager manager( process->model );
       manager.initialize( process->state );
@@ -154,8 +187,6 @@ private:
       process->measuresList[ FORCE ] = process->inputActuator->getOverrideActuation( process->state );
       
       std::this_thread::sleep_until( simulationTime + std::chrono::milliseconds( TIME_STEP_MS ) );
-      
-      std::cout << "simulation time: " << process->state.getTime() << std::endl;
     }
   }
 };
@@ -193,6 +224,7 @@ size_t Read( int processID, unsigned int channel, double* ref_value )
   
   OSimProcess* process = processList[ (size_t) processID ];
   
+//   process->Update();
   *ref_value = process->GetMeasurement( channel );
   
   return 1;
@@ -225,7 +257,8 @@ bool Write( int processID, unsigned int channel, double value )
   
   OSimProcess* process = processList[ (size_t) processID ];
   
-  process->SetForce( value );
+  //process->SetForce( value );
+  //process->Update();
   
   return true;
 }
