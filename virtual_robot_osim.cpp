@@ -45,6 +45,7 @@ typedef struct OSimDevice
   OpenSim::CoordinateActuator* controlActuator;
   OpenSim::Coordinate* coordinate;
   std::vector<double> measuresList;
+  double controlForce;
 }
 OSimDevice;
   
@@ -59,7 +60,7 @@ static volatile bool isUpdating;
 static std::vector<OSimDevice*> devicesList;
 
 OSimDevice* CreateOSimDevice( OpenSim::Model* model, SimTK::Vec3 color, int index )
-{  
+{    
   std::cout << "creating osim device" << std::endl;
   
   OSimDevice* device = new OSimDevice;
@@ -70,26 +71,26 @@ OSimDevice* CreateOSimDevice( OpenSim::Model* model, SimTK::Vec3 color, int inde
   device->body = new OpenSim::Body( "body_" + indexString, 1.0, SimTK::Vec3( 0, 0, 0 ), SimTK::Inertia( 1, 1, 1 ) );
   model->addBody( device->body );
   
-  double position = index * 1.5 - ( DEVICES_NUMBER - 1 ) * 1.5;
+  const double BODY_SIZE = 0.5;
+  double position = ( index - ( DEVICES_NUMBER - 1 ) ) * 3 * BODY_SIZE;
   
   const OpenSim::Ground& ground = model->getGround();
-  OpenSim::PinJoint* groundJoint = new OpenSim::PinJoint( "body2ground_" + indexString, 
-                                                          ground, SimTK::Vec3( position, 1.0, 0 ), SimTK::Vec3( 0, 0, 0 ), 
+  OpenSim::PinJoint* groundJoint = new OpenSim::PinJoint( "joint_" + indexString, 
+                                                          ground, SimTK::Vec3( position, 3 * BODY_SIZE, 0 ), SimTK::Vec3( 0, 0, 0 ), 
                                                           *(device->body), SimTK::Vec3( 0, 0, 0 ), SimTK::Vec3( 0, 0, 0 ) );
   model->addJoint( groundJoint );
   
-  OpenSim::Brick* blockMesh = new OpenSim::Brick( SimTK::Vec3( 0.5, 0.5, 0.5 ) );
-  blockMesh->setColor( color );
-  device->body->attachGeometry( blockMesh );
+  OpenSim::Cylinder* bodyMesh = new OpenSim::Cylinder( BODY_SIZE, BODY_SIZE );
+  bodyMesh->setColor( color );
   OpenSim::PhysicalOffsetFrame* offsetFrame = new OpenSim::PhysicalOffsetFrame();
   offsetFrame->setParentFrame( *(device->body) );
-  offsetFrame->set_orientation( SimTK::Vec3( 0.0, 0.0, SimTK::Pi / 3.0 ) );
-  offsetFrame->attachGeometry( blockMesh->clone() );
+  offsetFrame->set_orientation( SimTK::Vec3( SimTK::Pi / 2, 0.0, 0.0 ) );
+  offsetFrame->attachGeometry( bodyMesh );
   device->body->addComponent( offsetFrame );
   offsetFrame = new OpenSim::PhysicalOffsetFrame();
   offsetFrame->setParentFrame( *(device->body) );
-  offsetFrame->set_orientation( SimTK::Vec3( 0.0, 0.0, -SimTK::Pi / 3.0 ) );
-  offsetFrame->attachGeometry( blockMesh->clone() );
+  offsetFrame->set_translation( SimTK::Vec3( 0.0, BODY_SIZE, 0.0 ) );
+  offsetFrame->attachGeometry( new OpenSim::Brick( SimTK::Vec3( BODY_SIZE / 5, BODY_SIZE / 5, BODY_SIZE ) ) );
   device->body->addComponent( offsetFrame );
   
   OpenSim::Coordinate& coordinate = groundJoint->updCoordinate();
@@ -125,6 +126,12 @@ static void Update()
       }
     }
     
+    for( int deviceIndex = 0; deviceIndex < devicesList.size(); deviceIndex++ )
+    {
+      devicesList[ deviceIndex ]->controlActuator->setOverrideActuation( state, devicesList[ deviceIndex ]->controlForce );
+      model->updVisualizer().updSimbodyVisualizer().setSliderValue( deviceIndex * 2 + 1, devicesList[ deviceIndex ]->controlForce ); 
+    }
+    
     OpenSim::Manager manager( *model );
     manager.initialize( state );
     state = manager.integrate( std::chrono::duration_cast<std::chrono::duration<double>>( simulationTime - initialTime ).count() );
@@ -140,9 +147,6 @@ static void Update()
     std::this_thread::sleep_until( simulationTime + std::chrono::milliseconds( TIME_STEP_MS ) );
   }
 }
-  
-double GetMeasurement( size_t deviceIndex, size_t varIndex ) { return varIndex < VARS_NUMBER ? devicesList[ deviceIndex ]->measuresList[ varIndex ] : 0.0; }
-void SetForce( size_t deviceIndex, double value ) { model->updVisualizer().updSimbodyVisualizer().setSliderValue( deviceIndex * 2 + 1, value ); }
 
 DECLARE_MODULE_INTERFACE( SIGNAL_IO_INTERFACE );
 
@@ -215,7 +219,9 @@ size_t Read( int deviceID, unsigned int channel, double* ref_value )
   size_t deviceIndex = (size_t) deviceID;
   if( deviceIndex > devicesList.size() ) return 0;
   
-  *ref_value = GetMeasurement( deviceIndex, channel );
+  if( channel >= VARS_NUMBER ) return 0;
+  
+  *ref_value = devicesList[ deviceIndex ]->measuresList[ channel ];
   
   return 1;
 }
@@ -245,9 +251,9 @@ bool Write( int deviceID, unsigned int channel, double value )
   size_t deviceIndex = (size_t) deviceID;
   if( deviceIndex > devicesList.size() ) return false;
   
-  if( channel >= VARS_NUMBER ) return false;
+  if( channel != 0 ) return false;
   
-  SetForce( deviceIndex, value );
+  devicesList[ deviceIndex ]->controlForce = value;
   
   return true;
 }
