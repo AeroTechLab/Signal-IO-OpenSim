@@ -4,8 +4,8 @@ project( Signal-IO-OpenSim )
 set( CMAKE_CXX_STANDARD 11 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
-#SET(CMAKE_CXX_FLAGS "-O3")
-#SET(CMAKE_C_FLAGS "-O3")
+SET(CMAKE_CXX_FLAGS "-O3")
+SET(CMAKE_C_FLAGS "-O3")
 
 # Find the OpenSim libraries and header files.
 set( OPENSIM_INSTALL_DIR $ENV{OPENSIM_HOME} CACHE PATH "Top-level directory of OpenSim install." )

@@ -66,7 +66,7 @@ OSimDevice* CreateOSimDevice( OpenSim::Model* model, SimTK::Vec3 color, int inde
   OSimDevice* device = new OSimDevice;
   
   std::string indexString = std::to_string( index + 1 );
-  device->name = "actuator_" + indexString;
+  device->name = "device_" + indexString;
   
   device->body = new OpenSim::Body( "body_" + indexString, 1.0, SimTK::Vec3( 0, 0, 0 ), SimTK::Inertia( 1, 1, 1 ) );
   model->addBody( device->body );
@@ -120,10 +120,7 @@ static void Update()
       int sliderID;
       SimTK::Real forceValue;
       while( model->updVisualizer().updInputSilo().takeSliderMove( sliderID, forceValue ) )
-      {
-        std::cout << "force from slider " << sliderID << ": " << forceValue << std::endl;
         actuatorsList[ sliderID ]->setOverrideActuation( state, forceValue );
-      }
     }
     
     for( int deviceIndex = 0; deviceIndex < devicesList.size(); deviceIndex++ )
