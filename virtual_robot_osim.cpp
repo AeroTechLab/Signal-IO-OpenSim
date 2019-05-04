@@ -30,6 +30,7 @@
 #include <thread>
 #include <chrono>
 #include <vector>
+#include <exception>
 
 #define DEVICES_NUMBER 4
 
@@ -151,36 +152,47 @@ int InitDevice( const char* deviceName )
 {  
   if( model == nullptr )
   {
-    std::cout << "creating osim process" << std::endl;
-    model = new OpenSim::Model();
-    model->setUseVisualizer( true );
-    
-    model->setName( "osim_robot" );
-    model->setGravity( SimTK::Vec3( 0, 0, 0 ) );
-
-    for( size_t deviceIndex = 0; deviceIndex < DEVICES_NUMBER; deviceIndex++ )
-      devicesList.push_back( CreateOSimDevice( model, BLOCK_COLORS[ deviceIndex ], deviceIndex ) );
-  
-    state = model->initSystem();
-    
-    for( OSimDevice* device: devicesList )
+    try
     {
-      std::string sliderIndexString = std::to_string( actuatorsList.size() / 2 + 1 );
-      model->updVisualizer().updSimbodyVisualizer().addSlider( "User Force " + sliderIndexString , actuatorsList.size(), -1.0, 1.0, 0.0 );
-      actuatorsList.push_back( device->userActuator );
-      model->updVisualizer().updSimbodyVisualizer().addSlider( "Control Force " + sliderIndexString, actuatorsList.size(), -2.0, 2.0, 0.0 );
-      actuatorsList.push_back( device->controlActuator );
+      std::cout << "creating osim process" << std::endl;
+      model = new OpenSim::Model();
+      model->setUseVisualizer( true );
       
-      device->userActuator->overrideActuation( state, true );
-      device->controlActuator->overrideActuation( state, true );
+      model->setName( "osim_robot" );
+      model->setGravity( SimTK::Vec3( 0, 0, 0 ) );
+
+      for( size_t deviceIndex = 0; deviceIndex < DEVICES_NUMBER; deviceIndex++ )
+        devicesList.push_back( CreateOSimDevice( model, BLOCK_COLORS[ deviceIndex ], deviceIndex ) );
     
-      device->userActuator->getCoordinate()->setValue( state, 0.0 );
-    }    
-    
-    state.setTime( 0.0 );
-    
-    std::cout << "starting update thread" << std::endl;
-    updateThread = std::thread( Update );
+      state = model->initSystem();
+      
+      for( OSimDevice* device: devicesList )
+      {
+        std::string sliderIndexString = std::to_string( actuatorsList.size() / 2 + 1 );
+        model->updVisualizer().updSimbodyVisualizer().addSlider( "User Force " + sliderIndexString , actuatorsList.size(), -1.0, 1.0, 0.0 );
+        actuatorsList.push_back( device->userActuator );
+        model->updVisualizer().updSimbodyVisualizer().addSlider( "Control Force " + sliderIndexString, actuatorsList.size(), -2.0, 2.0, 0.0 );
+        actuatorsList.push_back( device->controlActuator );
+        
+        device->userActuator->overrideActuation( state, true );
+        device->controlActuator->overrideActuation( state, true );
+      
+        device->userActuator->getCoordinate()->setValue( state, 0.0 );
+      }    
+      
+      state.setTime( 0.0 );
+      
+      std::cout << "starting update thread" << std::endl;
+      updateThread = std::thread( Update );
+    }
+    catch( const OpenSim::Exception& exception )
+    {
+      std::cerr << exception.getMessage() << std::endl;
+    }
+    catch( const std::exception& exception )
+    {
+      std::cerr << exception.what() << std::endl;
+    }
   }
   
   for( int deviceIndex = 0; deviceIndex < devicesList.size(); deviceIndex++ )
