@@ -32,11 +32,11 @@
 #include <vector>
 #include <exception>
 
-#define DEVICES_NUMBER 4
+#define DEVICES_NUMBER 2
 
 enum OutputVariable { POSITION, VELOCITY, ACCELERATION, FORCE, VARS_NUMBER };
 
-static const SimTK::Vec3 BLOCK_COLORS[ DEVICES_NUMBER ] = { SimTK::Blue, SimTK::Red, SimTK::Green, SimTK::Yellow };
+static const SimTK::Vec3 BLOCK_COLORS[ DEVICES_NUMBER ] = { SimTK::Blue, SimTK::Red };
 
 typedef struct OSimDevice
 {
@@ -73,11 +73,11 @@ OSimDevice* CreateOSimDevice( OpenSim::Model* model, SimTK::Vec3 color, int inde
   model->addBody( device->body );
   
   const double BODY_SIZE = 0.5;
-  double position = ( index - ( DEVICES_NUMBER - 1 ) ) * 3 * BODY_SIZE;
+  const double BODY_DISTANCE = 3 * BODY_SIZE;
   
-  const OpenSim::Ground& ground = model->getGround();
+  const OpenSim::PhysicalFrame& refFrame = ( index == 0 ) ? (const OpenSim::PhysicalFrame&) model->getGround() : (const OpenSim::PhysicalFrame&) model->getBodySet().get( 0 );
   OpenSim::PinJoint* groundJoint = new OpenSim::PinJoint( "joint_" + indexString, 
-                                                          ground, SimTK::Vec3( position, 3 * BODY_SIZE, 0 ), SimTK::Vec3( 0, 0, 0 ), 
+                                                          refFrame, SimTK::Vec3( 0, BODY_DISTANCE, 0 ), SimTK::Vec3( 0, 0, 0 ), 
                                                           *(device->body), SimTK::Vec3( 0, 0, 0 ), SimTK::Vec3( 0, 0, 0 ) );
   model->addJoint( groundJoint );
   
@@ -90,8 +90,16 @@ OSimDevice* CreateOSimDevice( OpenSim::Model* model, SimTK::Vec3 color, int inde
   device->body->addComponent( offsetFrame );
   offsetFrame = new OpenSim::PhysicalOffsetFrame();
   offsetFrame->setParentFrame( *(device->body) );
-  offsetFrame->set_translation( SimTK::Vec3( 0.0, BODY_SIZE, 0.0 ) );
-  offsetFrame->attachGeometry( new OpenSim::Brick( SimTK::Vec3( BODY_SIZE / 5, BODY_SIZE / 5, BODY_SIZE ) ) );
+  offsetFrame->set_translation( SimTK::Vec3( 0.0, BODY_DISTANCE / 2, 0.0 ) );
+  offsetFrame->attachGeometry( new OpenSim::Brick( SimTK::Vec3( BODY_SIZE / 5, BODY_DISTANCE / 2, BODY_SIZE / 2 ) ) );
+  device->body->addComponent( offsetFrame );
+  offsetFrame = new OpenSim::PhysicalOffsetFrame();
+  offsetFrame->setParentFrame( *(device->body) );
+  offsetFrame->set_translation( SimTK::Vec3( 0.0, BODY_DISTANCE, 0.0 ) );
+  offsetFrame->set_orientation( SimTK::Vec3( SimTK::Pi / 2, 0.0, 0.0 ) );
+  bodyMesh = new OpenSim::Cylinder( BODY_SIZE / 2, BODY_SIZE );
+  bodyMesh->setColor( color );
+  offsetFrame->attachGeometry( bodyMesh );
   device->body->addComponent( offsetFrame );
   
   OpenSim::Coordinate& coordinate = groundJoint->updCoordinate();
