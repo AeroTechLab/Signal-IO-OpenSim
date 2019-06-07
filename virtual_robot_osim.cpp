@@ -76,10 +76,10 @@ OSimDevice* CreateOSimDevice( OpenSim::Model* model, SimTK::Vec3 color, int inde
   const double BODY_DISTANCE = 3 * BODY_SIZE;
   
   const OpenSim::PhysicalFrame& refFrame = ( index == 0 ) ? (const OpenSim::PhysicalFrame&) model->getGround() : (const OpenSim::PhysicalFrame&) model->getBodySet().get( 0 );
-  OpenSim::PinJoint* groundJoint = new OpenSim::PinJoint( "joint_" + indexString, 
-                                                          refFrame, SimTK::Vec3( 0, BODY_DISTANCE, 0 ), SimTK::Vec3( 0, 0, 0 ), 
-                                                          *(device->body), SimTK::Vec3( 0, 0, 0 ), SimTK::Vec3( 0, 0, 0 ) );
-  model->addJoint( groundJoint );
+  OpenSim::PinJoint* pinJoint = new OpenSim::PinJoint( "joint_" + indexString, 
+                                                       refFrame, SimTK::Vec3( 0, BODY_DISTANCE, 0 ), SimTK::Vec3( 0, 0, 0 ), 
+                                                       *(device->body), SimTK::Vec3( 0, 0, 0 ), SimTK::Vec3( 0, 0, 0 ) );
+  model->addJoint( pinJoint );
   
   OpenSim::Cylinder* bodyMesh = new OpenSim::Cylinder( BODY_SIZE, BODY_SIZE );
   bodyMesh->setColor( color );
@@ -102,7 +102,7 @@ OSimDevice* CreateOSimDevice( OpenSim::Model* model, SimTK::Vec3 color, int inde
   offsetFrame->attachGeometry( bodyMesh );
   device->body->addComponent( offsetFrame );
   
-  OpenSim::Coordinate& coordinate = groundJoint->updCoordinate();
+  OpenSim::Coordinate& coordinate = pinJoint->updCoordinate();
   device->userActuator = new OpenSim::CoordinateActuator( coordinate.getName() );
   model->addForce( device->userActuator );
   device->controlActuator = new OpenSim::CoordinateActuator( coordinate.getName() );

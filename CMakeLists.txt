@@ -15,7 +15,7 @@ find_package( OpenSim 4.0 REQUIRED PATHS "${OPENSIM_INSTALL_DIR}" )
 
 include( ${CMAKE_CURRENT_LIST_DIR}/signal_io/CMakeLists.txt )
 
-include_directories( ${CMAKE_CURRENT_LIST_DIR} )
+include_directories( ${CMAKE_CURRENT_LIST_DIR} ${OpenSim_INCLUDE_DIRS} ${Simbody_INCLUDE_DIRS} )
 
 add_library( OpenSimRobotIO MODULE  ${CMAKE_CURRENT_LIST_DIR}/virtual_robot_osim.cpp )
 set_target_properties( OpenSimRobotIO PROPERTIES PREFIX "" )
