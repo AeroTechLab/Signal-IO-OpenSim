@@ -1,23 +1,23 @@
-////////////////////////////////////////////////////////////////////////////////
-//                                                                            //
-//  Copyright (c) 2016-2019 Leonardo Consoni <consoni_2519@hotmail.com>       //
-//                                                                            //
-//  This file is part of RobotSystem-Lite.                                    //
-//                                                                            //
-//  RobotSystem-Lite is free software: you can redistribute it and/or modify  //
-//  it under the terms of the GNU Lesser General Public License as published  //
-//  by the Free Software Foundation, either version 3 of the License, or      //
-//  (at your option) any later version.                                       //
-//                                                                            //
-//  RobotSystem-Lite is distributed in the hope that it will be useful,       //
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of            //
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the              //
-//  GNU Lesser General Public License for more details.                       //
-//                                                                            //
-//  You should have received a copy of the GNU Lesser General Public License  //
-//  along with RobotSystem-Lite. If not, see <http://www.gnu.org/licenses/>.  //
-//                                                                            //
-////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+//                                                                                 //
+//  Copyright (c) 2016-2019 Leonardo Consoni <leonardojc@protonmail.com>           //
+//                                                                                 //
+//  This file is part of Robot-Control-OpenSim.                                    //
+//                                                                                 //
+//  Robot-Control-OpenSim is free software: you can redistribute it and/or modify  //
+//  it under the terms of the GNU Lesser General Public License as published       //
+//  by the Free Software Foundation, either version 3 of the License, or           //
+//  (at your option) any later version.                                            //
+//                                                                                 //
+//  Robot-Control-OpenSim is distributed in the hope that it will be useful,       //
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of                 //
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the                   //
+//  GNU Lesser General Public License for more details.                            //
+//                                                                                 //
+//  You should have received a copy of the GNU Lesser General Public License       //
+//  along with Robot-Control-OpenSim. If not, see <http://www.gnu.org/licenses/>.  //
+//                                                                                 //
+/////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "signal_io/signal_io.h"
@@ -156,7 +156,7 @@ static void Update()
 
 DECLARE_MODULE_INTERFACE( SIGNAL_IO_INTERFACE );
 
-int InitDevice( const char* deviceName )
+long int InitDevice( const char* deviceName )
 {  
   if( model == nullptr )
   {
@@ -203,13 +203,13 @@ int InitDevice( const char* deviceName )
     }
   }
   
-  for( int deviceIndex = 0; deviceIndex < devicesList.size(); deviceIndex++ )
+  for( long int deviceIndex = 0; deviceIndex < devicesList.size(); deviceIndex++ )
     if( devicesList[ deviceIndex ]->name == deviceName ) return deviceIndex;
 
   return SIGNAL_IO_DEVICE_INVALID_ID;
 }
 
-void EndDevice( int deviceID )
+void EndDevice( long int deviceID )
 {
   isUpdating = false;
   updateThread.join();
@@ -224,12 +224,12 @@ void EndDevice( int deviceID )
   return;
 }
 
-size_t GetMaxInputSamplesNumber( int deviceID )
+size_t GetMaxInputSamplesNumber( long int deviceID )
 {
   return 1;
 }
 
-size_t Read( int deviceID, unsigned int channel, double* ref_value )
+size_t Read( long int deviceID, unsigned int channel, double* ref_value )
 {
   *ref_value = 0.0;
   
@@ -243,17 +243,17 @@ size_t Read( int deviceID, unsigned int channel, double* ref_value )
   return 1;
 }
 
-bool HasError( int deviceID )
+bool HasError( long int deviceID )
 {
   return false;
 }
 
-void Reset( int deviceID )
+void Reset( long int deviceID )
 {
   return;
 }
 
-bool CheckInputChannel( int deviceID, unsigned int channel )
+bool CheckInputChannel( long int deviceID, unsigned int channel )
 {
   size_t deviceIndex = (size_t) deviceID;
   if( deviceIndex > devicesList.size() ) return false;
@@ -263,7 +263,7 @@ bool CheckInputChannel( int deviceID, unsigned int channel )
   return true;
 }
 
-bool Write( int deviceID, unsigned int channel, double value )
+bool Write( long int deviceID, unsigned int channel, double value )
 {
   size_t deviceIndex = (size_t) deviceID;
   if( deviceIndex > devicesList.size() ) return false;
@@ -275,12 +275,12 @@ bool Write( int deviceID, unsigned int channel, double value )
   return true;
 }
 
-bool AcquireOutputChannel( int taskID, unsigned int channel )
+bool AcquireOutputChannel( long int taskID, unsigned int channel )
 {
   return true;
 }
 
-void ReleaseOutputChannel( int taskID, unsigned int channel )
+void ReleaseOutputChannel( long int taskID, unsigned int channel )
 {
   return;
 }
